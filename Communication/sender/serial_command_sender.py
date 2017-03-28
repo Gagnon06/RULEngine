@@ -15,8 +15,7 @@ from RULEngine.Game.Player import Player
 
 SERIAL_DISABLED = -1
 COMMUNICATION_SLEEP = 0.001
-MOVE_COMMAND_SLEEP = 0.1
-
+MOVE_COMMAND_SLEEP = 0.01
 
 class SerialType(Enum):
     NRF = 1
