@@ -21,6 +21,8 @@ from RULEngine.Communication.util.serial_protocol import MCUVersion
 from RULEngine.Communication.sender.uidebug_command_sender import UIDebugCommandSender
 from RULEngine.Communication.receiver.uidebug_command_receiver import UIDebugCommandReceiver
 from RULEngine.Communication.sender.uidebug_vision_sender import UIDebugVisionSender
+
+from RULEngine.vision_frame_merger import VisionFrameMerger
 # Debug
 from RULEngine.Debug.debug_interface import DebugInterface
 
@@ -33,7 +35,9 @@ from RULEngine.Util.team_color_service import TeamColorService
 from RULEngine.Util.game_world import GameWorld
 from RULEngine.Util.image_transformer import ImageTransformer
 
+
 # TODO inquire about those constants (move, utility)
+
 LOCAL_UDP_MULTICAST_ADDRESS = "224.5.23.2"
 UI_DEBUG_MULTICAST_ADDRESS = "127.0.0.1"
 CMD_DELTA_TIME = 0.0
@@ -66,13 +70,14 @@ class Framework(object):
         # Communication
         self.robot_command_sender = None
         self.vision = None
+        self.vision_merger = None
         self.referee_command_receiver = None
         self.uidebug_command_sender = None
         self.uidebug_command_receiver = None
         self.uidebug_vision_sender = None
         # because this thing below is a callable!
         self.vision_redirecter = lambda *args: None
-        self.vision_routine = self._normal_vision  # self._normal_vision # self._test_vision
+        self.vision_routine = self._merged_vision#self._normal_vision  # self._normal_vision # self._test_vision
         # Debug
         self.incoming_debug = []
         self.outgoing_debug = []
@@ -123,6 +128,7 @@ class Framework(object):
 
             self.referee_command_receiver = RefereeReceiver(LOCAL_UDP_MULTICAST_ADDRESS)
             self.vision = VisionReceiver(LOCAL_UDP_MULTICAST_ADDRESS)
+            self.vision_merger = VisionFrameMerger(self.vision)
         else:
             self.stop_game()
 
@@ -237,6 +243,20 @@ class Framework(object):
             self.game.set_command(robot_commands)
             self._send_debug_commands()
             #print(time.time() - self.time_stamp)
+
+    def _merged_vision(self):
+        vision_frame = self.vision_merger.get_merged_frame()
+        if self._is_frame_number_different(vision_frame):
+            print(vision_frame)
+            self._update_players_and_ball(vision_frame)
+            self._update_debug_info()
+            robot_commands = self.ia_coach_mainloop()
+
+            # Communication
+            self._send_robot_commands(robot_commands)
+            self.game.set_command(robot_commands)
+            self._send_debug_commands()
+        time.sleep((0.03 - time.time()) % 0.03) #TODO change delta t for a constant?
 
     def _test_vision(self):
         vision_frame = self._acquire_last_vision_frame()
